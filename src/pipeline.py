@@ -1,5 +1,5 @@
 """
-ETL Pipeline para datos de Airbnb NYC
+ETL Pipeline for NYC Airbnb Data
 """
 
 import pandas as pd
@@ -9,7 +9,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 
-# Configurar logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -23,102 +23,102 @@ logger = logging.getLogger(__name__)
 
 class NYC_Airbnb_ETL:
     """
-    Clase principal para el pipeline ETL de datos de Airbnb NYC
+    Main ETL pipeline class for NYC Airbnb data
     """
     
     def __init__(self):
-        """Inicializar el pipeline"""
+        """Initialize the pipeline"""
         self.data = None
         self.processed_data = None
-        logger.info("Pipeline ETL inicializado")
+        logger.info("ETL Pipeline initialized")
     
     def extract(self, zip_path):
         """
-        Extrae datos del archivo ZIP
+        Extract data from ZIP file
         
         Args:
-            zip_path: Ruta al archivo ZIP
+            zip_path: Path to ZIP file
             
         Returns:
-            DataFrame con los datos extraídos
+            DataFrame with extracted data
         """
-        logger.info(f"Extrayendo datos de: {zip_path}")
+        logger.info(f"Extracting data from: {zip_path}")
         
         try:
-            # Verificar que el archivo existe
+            # Check if file exists
             if not os.path.exists(zip_path):
-                raise FileNotFoundError(f"Archivo no encontrado: {zip_path}")
+                raise FileNotFoundError(f"File not found: {zip_path}")
             
-            # Abrir el archivo ZIP
+            # Open ZIP file
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # Listar archivos en el ZIP
+                # List files in ZIP
                 file_list = zip_ref.namelist()
-                logger.info(f"Archivos en el ZIP: {file_list}")
+                logger.info(f"Files in ZIP: {file_list}")
                 
-                # Buscar archivos CSV
+                # Look for CSV files
                 csv_files = [f for f in file_list if f.lower().endswith('.csv')]
                 
                 if not csv_files:
-                    raise ValueError("No se encontraron archivos CSV en el ZIP")
+                    raise ValueError("No CSV files found in ZIP")
                 
-                # Tomar el primer archivo CSV
+                # Take first CSV file
                 csv_file = csv_files[0]
-                logger.info(f"Procesando archivo: {csv_file}")
+                logger.info(f"Processing file: {csv_file}")
                 
-                # Extraer y leer el CSV
+                # Extract and read CSV
                 with zip_ref.open(csv_file) as f:
                     df = pd.read_csv(f)
                 
-                logger.info(f"Datos extraídos exitosamente - Filas: {df.shape[0]}, Columnas: {df.shape[1]}")
+                logger.info(f"Data extracted successfully - Rows: {df.shape[0]}, Columns: {df.shape[1]}")
                 self.data = df
                 return df
                 
         except Exception as e:
-            logger.error(f"Error en extracción: {str(e)}")
+            logger.error(f"Extraction error: {str(e)}")
             raise
     
     def transform(self, df):
         """
-        Transforma y limpia los datos
+        Transform and clean data
         
         Args:
-            df: DataFrame con datos crudos
+            df: DataFrame with raw data
             
         Returns:
-            DataFrame con datos transformados
+            DataFrame with transformed data
         """
-        logger.info("Iniciando transformación de datos...")
+        logger.info("Starting data transformation...")
         
-        # Hacer una copia para no modificar el original
+        # Make a copy to avoid modifying original
         df_clean = df.copy()
         
-        # 1. Limpiar nombres de columnas
+        # 1. Clean column names
         df_clean.columns = [
             col.strip().lower().replace(' ', '_').replace('-', '_')
             for col in df_clean.columns
         ]
-        logger.info(f"Columnas después de limpieza: {list(df_clean.columns)}")
+        logger.info(f"Columns after cleaning: {list(df_clean.columns)}")
         
-        # 2. Eliminar filas completamente vacías
+        # 2. Remove completely empty rows
         initial_rows = len(df_clean)
         df_clean = df_clean.dropna(how='all')
-        logger.info(f"Filas eliminadas (completamente vacías): {initial_rows - len(df_clean)}")
+        logger.info(f"Rows removed (completely empty): {initial_rows - len(df_clean)}")
         
-        # 3. Eliminar duplicados
+        # 3. Remove duplicates
         df_clean = df_clean.drop_duplicates()
-        logger.info(f"Filas después de eliminar duplicados: {len(df_clean)}")
+        logger.info(f"Rows after removing duplicates: {len(df_clean)}")
         
-        # 4. Manejar valores faltantes
+        # 4. Handle missing values
         missing_percent = (df_clean.isnull().sum() / len(df_clean)) * 100
-        logger.info("Porcentaje de valores faltantes por columna:")
+        logger.info("Percentage of missing values per column:")
         for col, percent in missing_percent.items():
             if percent > 0:
                 logger.info(f"  {col}: {percent:.2f}%")
         
-        # 5. Limpiar columna de precio
+        # 5. Clean price column
         if 'price' in df_clean.columns:
-            logger.info("Limpiando columna 'price'...")
-            # Convertir a string, eliminar símbolos y convertir a float
+            logger.info("Cleaning 'price' column...")
+            # Convert to string, remove symbols, convert to float
             df_clean['price'] = (
                 df_clean['price']
                 .astype(str)
@@ -126,80 +126,80 @@ class NYC_Airbnb_ETL:
                 .astype(float, errors='coerce')
             )
             
-            # Filtrar precios válidos
+            # Filter valid prices
             valid_prices = df_clean['price'].between(0, 10000)
             df_clean = df_clean[valid_prices]
-            logger.info(f"Precios válidos (0-10000): {valid_prices.sum()} filas")
+            logger.info(f"Valid prices (0-10000): {valid_prices.sum()} rows")
         
-        # 6. Convertir fechas
+        # 6. Convert dates
         date_columns = ['last_review', 'host_since']
         for col in date_columns:
             if col in df_clean.columns:
                 df_clean[col] = pd.to_datetime(df_clean[col], errors='coerce')
-                logger.info(f"Convertida columna de fecha: {col}")
+                logger.info(f"Converted date column: {col}")
         
-        # 7. Crear nuevas características
+        # 7. Create new features
         if 'last_review' in df_clean.columns:
-            # Días desde la última revisión
+            # Days since last review
             df_clean['days_since_last_review'] = (
                 datetime.now() - df_clean['last_review']
             ).dt.days
             df_clean['days_since_last_review'] = df_clean['days_since_last_review'].fillna(-1)
         
         if 'price' in df_clean.columns and 'minimum_nights' in df_clean.columns:
-            # Precio por noche
+            # Price per night
             df_clean['price_per_night'] = df_clean['price'] / df_clean['minimum_nights'].clip(lower=1)
         
         if 'availability_365' in df_clean.columns:
-            # Disponibilidad booleana
+            # Availability boolean
             df_clean['is_available'] = df_clean['availability_365'] > 0
         
-        logger.info(f"Transformación completada - Filas: {df_clean.shape[0]}, Columnas: {df_clean.shape[1]}")
+        logger.info(f"Transformation completed - Rows: {df_clean.shape[0]}, Columns: {df_clean.shape[1]}")
         self.processed_data = df_clean
         return df_clean
     
     def load(self, df, output_dir="data/processed"):
         """
-        Guarda los datos procesados
+        Save processed data
         
         Args:
-            df: DataFrame con datos procesados
-            output_dir: Directorio de salida
+            df: DataFrame with processed data
+            output_dir: Output directory
             
         Returns:
-            Tupla con rutas a los archivos guardados
+            Tuple with paths to saved files
         """
-        logger.info(f"Guardando datos procesados en: {output_dir}")
+        logger.info(f"Saving processed data to: {output_dir}")
         
-        # Crear directorio si no existe
+        # Create directory if it doesn't exist
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        # Generar timestamp para nombres únicos
+        # Generate timestamp for unique names
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Guardar como CSV
+        # Save as CSV
         csv_filename = f"nyc_airbnb_processed_{timestamp}.csv"
         csv_path = os.path.join(output_dir, csv_filename)
         df.to_csv(csv_path, index=False)
-        logger.info(f"CSV guardado: {csv_path}")
+        logger.info(f"CSV saved: {csv_path}")
         
-        # Guardar como Parquet (más eficiente)
+        # Save as Parquet (more efficient)
         parquet_filename = f"nyc_airbnb_processed_{timestamp}.parquet"
         parquet_path = os.path.join(output_dir, parquet_filename)
         df.to_parquet(parquet_path, index=False)
-        logger.info(f"Parquet guardado: {parquet_path}")
+        logger.info(f"Parquet saved: {parquet_path}")
         
-        # Guardar también un archivo sin timestamp para referencia
+        # Also save a file without timestamp for reference
         latest_csv = os.path.join(output_dir, "nyc_airbnb_latest.csv")
         df.to_csv(latest_csv, index=False)
         
-        # Crear archivo de metadatos
+        # Create metadata file
         self._save_metadata(df, output_dir, timestamp)
         
         return csv_path, parquet_path
     
     def _save_metadata(self, df, output_dir, timestamp):
-        """Guarda metadatos del procesamiento"""
+        """Save processing metadata"""
         metadata = {
             'timestamp': timestamp,
             'rows': len(df),
@@ -213,41 +213,41 @@ class NYC_Airbnb_ETL:
             for key, value in metadata.items():
                 f.write(f"{key}: {value}\n")
         
-        logger.info(f"Metadatos guardados: {metadata_path}")
+        logger.info(f"Metadata saved: {metadata_path}")
     
     def run(self, zip_path, output_dir="data/processed"):
         """
-        Ejecuta el pipeline completo
+        Run complete pipeline
         
         Args:
-            zip_path: Ruta al archivo ZIP
-            output_dir: Directorio de salida
+            zip_path: Path to ZIP file
+            output_dir: Output directory
             
         Returns:
-            DataFrame con datos procesados
+            DataFrame with processed data
         """
         logger.info("=" * 60)
-        logger.info("INICIANDO PIPELINE ETL - NYC AIRBNB")
+        logger.info("STARTING ETL PIPELINE - NYC AIRBNB")
         logger.info("=" * 60)
         
         try:
-            # 1. EXTRACCIÓN
+            # 1. EXTRACTION
             raw_data = self.extract(zip_path)
             
-            # 2. TRANSFORMACIÓN
+            # 2. TRANSFORMATION
             processed_data = self.transform(raw_data)
             
-            # 3. CARGA
+            # 3. LOADING
             csv_path, parquet_path = self.load(processed_data, output_dir)
             
-            # 4. RESUMEN
+            # 4. SUMMARY
             logger.info("=" * 60)
-            logger.info("PIPELINE COMPLETADO EXITOSAMENTE")
+            logger.info("PIPELINE COMPLETED SUCCESSFULLY")
             logger.info("=" * 60)
-            logger.info(f"Resumen:")
-            logger.info(f"  - Datos crudos: {raw_data.shape[0]} filas, {raw_data.shape[1]} columnas")
-            logger.info(f"  - Datos procesados: {processed_data.shape[0]} filas, {processed_data.shape[1]} columnas")
-            logger.info(f"  - Archivos generados:")
+            logger.info(f"Summary:")
+            logger.info(f"  - Raw data: {raw_data.shape[0]} rows, {raw_data.shape[1]} columns")
+            logger.info(f"  - Processed data: {processed_data.shape[0]} rows, {processed_data.shape[1]} columns")
+            logger.info(f"  - Generated files:")
             logger.info(f"      • CSV: {csv_path}")
             logger.info(f"      • Parquet: {parquet_path}")
             logger.info("=" * 60)
@@ -255,5 +255,5 @@ class NYC_Airbnb_ETL:
             return processed_data
             
         except Exception as e:
-            logger.error(f"Error en el pipeline: {str(e)}")
+            logger.error(f"Pipeline error: {str(e)}")
             raise

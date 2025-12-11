@@ -1,0 +1,7 @@
+ab_newyork_etl/
+├── src/              # Source code for ETL pipeline
+├── notebooks/        # Jupyter notebooks for analysis
+├── data/            # Data storage (raw & processed)
+├── tests/           # Unit tests
+├── scripts/         # Execution scripts
+└── config.yaml      # Configuration file

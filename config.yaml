@@ -1,0 +1,58 @@
+# ETL Pipeline Configuration
+
+paths:
+  raw_data: "data/raw/"
+  processed_data: "data/processed/"
+  logs: "logs/"
+  
+extraction:
+  source_type: "zip"  # zip, csv, api
+  encoding: "utf-8"
+  compression: "infer"
+  
+transformation:
+  # Cleaning
+  missing_threshold: 0.5
+  outlier_method: "iqr"
+  
+  # Columns to process
+  numeric_cols:
+    - "price"
+    - "minimum_nights"
+    - "number_of_reviews"
+    - "reviews_per_month"
+    - "calculated_host_listings_count"
+    - "availability_365"
+    
+  categorical_cols:
+    - "neighbourhood_group"
+    - "neighbourhood"
+    - "room_type"
+    
+  date_cols:
+    - "last_review"
+  
+  # Feature engineering
+  create_features:
+    - "price_per_night"
+    - "has_availability"
+    - "review_recency"
+  
+loading:
+  output_formats: ["csv", "parquet"]
+  database:
+    enabled: false
+    type: "sqlite"
+    connection_string: "sqlite:///data/airbnb.db"
+    
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  rotation: "10 MB"
+  
+quality_checks:
+  enabled: true
+  tests:
+    - no_null_ids
+    - price_positive
+    - dates_consistent

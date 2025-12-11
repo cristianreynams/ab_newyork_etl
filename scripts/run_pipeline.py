@@ -1,96 +1,114 @@
 #!/usr/bin/env python3
 """
-Script simple para ejecutar el ETL de NYC Airbnb
+Script principal para ejecutar el pipeline ETL
 """
+
 import sys
 import os
-import subprocess
+import argparse
+from pathlib import Path
 
-# Intentar importar el pipeline
-try:
-    from simple_pipeline import ETLPipeline
-    print("✅ Módulos importados correctamente")
-except ImportError as e:
-    print(f"❌ Error importando módulos: {e}")
-    print("💡 Asegúrate de que simple_pipeline.py existe")
-    sys.exit(1)
+# Añadir el directorio src al path
+current_dir = Path(__file__).parent
+src_dir = current_dir.parent / "src"
+sys.path.insert(0, str(src_dir))
 
 def main():
-    # Ruta al archivo ZIP en Google Drive
-    zip_path = "/content/drive/MyDrive/Datasets/ab_newyork.zip"
+    parser = argparse.ArgumentParser(description='ETL Pipeline para datos de Airbnb NYC')
+    parser.add_argument(
+        '--source', 
+        type=str, 
+        default='/content/drive/MyDrive/Datasets/ab_newyork.zip',
+        help='Ruta al archivo ZIP con los datos (default: /content/drive/MyDrive/Datasets/ab_newyork.zip)'
+    )
+    parser.add_argument(
+        '--output', 
+        type=str, 
+        default='data/processed',
+        help='Directorio de salida para datos procesados (default: data/processed)'
+    )
+    parser.add_argument(
+        '--log-level', 
+        type=str, 
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='INFO',
+        help='Nivel de logging (default: INFO)'
+    )
     
-    print(f"🔍 Buscando archivo: {zip_path}")
+    args = parser.parse_args()
     
-    if not os.path.exists(zip_path):
-        print(f"❌ ERROR: Archivo no encontrado: {zip_path}")
-        print("\\n💡 Posibles soluciones:")
-        print("1. Verifica que Google Drive está montado")
-        print("2. Verifica la ruta exacta")
-        print("3. Lista el contenido de Datasets:")
-        
-        # Usar subprocess en lugar de !
-        try:
-            result = subprocess.run(['ls', '-la', '/content/drive/MyDrive/Datasets/'], 
-                                  capture_output=True, text=True)
-            if result.returncode == 0:
-                print(result.stdout)
-            else:
-                print("   (No se pudo acceder a la carpeta)")
-        except:
-            print("   (Error al listar el directorio)")
-        
-        sys.exit(1)
-    
-    file_size = os.path.getsize(zip_path) / (1024 * 1024)
-    print(f"✅ Archivo encontrado: {file_size:.2f} MB")
-    print("\\n🚀 Iniciando pipeline ETL...")
+    print("=" * 70)
+    print("ETL PIPELINE - NYC AIRBNB DATA")
+    print("=" * 70)
+    print(f"Source: {args.source}")
+    print(f"Output: {args.output}")
+    print(f"Log level: {args.log_level}")
+    print("=" * 70)
     
     try:
+        # Importar después de configurar el path
+        from pipeline import NYC_Airbnb_ETL
+        
+        # Configurar nivel de logging
+        import logging
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
+        
         # Crear y ejecutar pipeline
-        pipeline = ETLPipeline()
-        data, summary = pipeline.run(zip_path)
+        pipeline = NYC_Airbnb_ETL()
         
-        print("\\n" + "="*60)
-        print("🎉 ¡ETL COMPLETADO CON ÉXITO!")
-        print("="*60)
-        print(f"📊 RESUMEN:")
-        print(f"   • Filas originales: {summary['raw_rows']:,}")
-        print(f"   • Filas procesadas: {summary['processed_rows']:,}")
-        print(f"   • Columnas originales: {summary['raw_columns']}")
-        print(f"   • Columnas procesadas: {summary['processed_columns']}")
-        print(f"   • CSV generado: {summary['csv_path']}")
-        if summary['parquet_path']:
-            print(f"   • Parquet generado: {summary['parquet_path']}")
+        print("\n🚀 Iniciando pipeline...")
+        processed_data = pipeline.run(args.source, args.output)
         
-        print("\\n📈 ESTADÍSTICAS BÁSICAS:")
-        print(f"   • Tipos de datos:")
-        for dtype, count in data.dtypes.value_counts().items():
-            print(f"      - {dtype}: {count}")
+        # Mostrar resumen en consola
+        print("\n" + "=" * 70)
+        print("✅ PIPELINE COMPLETADO EXITOSAMENTE")
+        print("=" * 70)
+        print(f"📊 Datos procesados: {len(processed_data):,} filas, {len(processed_data.columns)} columnas")
+        print(f"📁 Directorio de salida: {args.output}")
         
-        if 'price' in data.columns:
-            print(f"\\n   • Estadísticas de precio:")
-            print(f"      - Mínimo: ${data['price'].min():.2f}")
-            print(f"      - Máximo: ${data['price'].max():.2f}")
-            print(f"      - Promedio: ${data['price'].mean():.2f}")
-            print(f"      - Mediana: ${data['price'].median():.2f}")
+        # Listar archivos generados
+        if os.path.exists(args.output):
+            print("\n📄 Archivos generados:")
+            for file in os.listdir(args.output):
+                file_path = os.path.join(args.output, file)
+                size = os.path.getsize(file_path) / 1024  # KB
+                print(f"  • {file} ({size:.1f} KB)")
         
-        if 'room_type' in data.columns:
-            print(f"\\n   • Distribución de tipos de habitación:")
-            for room_type, count in data['room_type'].value_counts().items():
-                print(f"      - {room_type}: {count}")
+        # Mostrar información básica del dataset
+        print("\n📈 Información del dataset:")
+        print(f"  - Columnas: {list(processed_data.columns)}")
         
-        # Mostrar primeras filas
-        print("\\n📄 MUESTRA DE DATOS (primeras 5 filas):")
-        print(data.head().to_string())
+        if 'price' in processed_data.columns:
+            print(f"  - Precio promedio: ${processed_data['price'].mean():.2f}")
+            print(f"  - Rango de precios: ${processed_data['price'].min():.2f} - ${processed_data['price'].max():.2f}")
         
-        # Guardar resumen en archivo
-        with open('etl_summary.txt', 'w') as f:
-            for key, value in summary.items():
-                f.write(f"{key}: {value}\\n")
-        print("\\n💾 Resumen guardado en: etl_summary.txt")
+        if 'neighbourhood_group' in processed_data.columns:
+            neighborhoods = processed_data['neighbourhood_group'].value_counts()
+            print(f"  - Distribución por barrio:")
+            for neighborhood, count in neighborhoods.head().items():
+                print(f"      {neighborhood}: {count:,} ({count/len(processed_data)*100:.1f}%)")
+        
+        print("=" * 70)
+        print("✨ Pipeline finalizado. Revisa el archivo etl_pipeline.log para más detalles.")
+        print("=" * 70)
+        
+    except ImportError as e:
+        print(f"\n❌ Error de importación: {e}")
+        print("💡 Asegúrate de que:")
+        print("   1. El archivo src/pipeline.py existe")
+        print("   2. La clase NYC_Airbnb_ETL está definida en pipeline.py")
+        sys.exit(1)
+        
+    except FileNotFoundError as e:
+        print(f"\n❌ Archivo no encontrado: {e}")
+        print("💡 Verifica que:")
+        print("   1. Google Drive está montado (en Colab)")
+        print("   2. La ruta al archivo ZIP es correcta")
+        print("   3. El archivo existe en la ubicación especificada")
+        sys.exit(1)
         
     except Exception as e:
-        print(f"\\n❌ ERROR en el pipeline: {e}")
+        print(f"\n❌ Error durante la ejecución: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

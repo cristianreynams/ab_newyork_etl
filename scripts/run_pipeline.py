@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-Script para ejecutar el pipeline ETL
+Script to run the ETL pipeline
 """
 import sys
 import os
 import subprocess
 from pathlib import Path
 
-# Añadir src al path
+# Add src to path
 current_dir = Path(__file__).parent
 src_dir = current_dir.parent / "src"
 sys.path.insert(0, str(src_dir))
 
-def buscar_archivos_zip():
-    """Busca archivos ZIP en Google Drive"""
-    print("\\n📂 Explorando Google Drive...")
+def search_zip_files():
+    """Search for ZIP files in Google Drive"""
+    print("\n📂 Searching Google Drive...")
     try:
-        # Usar subprocess para ejecutar comandos de shell
+        # Use subprocess to run shell commands
         result = subprocess.run(
             ['find', '/content/drive/MyDrive', '-name', '*.zip', '-type', 'f'],
             capture_output=True,
@@ -24,70 +24,70 @@ def buscar_archivos_zip():
             timeout=10
         )
         if result.returncode == 0 and result.stdout:
-            files = result.stdout.strip().split('\\n')
-            for file in files[:10]:  # Mostrar solo los primeros 10
+            files = result.stdout.strip().split('\n')
+            for file in files[:10]:  # Show only first 10
                 if file:
                     print(f"  • {file}")
         else:
-            print("  No se encontraron archivos ZIP")
+            print("  No ZIP files found")
     except Exception as e:
-        print(f"  Error al buscar archivos: {e}")
+        print(f"  Error searching for files: {e}")
 
 try:
     from src.pipeline import NYC_Airbnb_ETL
-    print("✅ Módulos importados correctamente")
+    print("✅ Modules imported correctly")
 except Exception as e:
-    print(f"❌ Error importando: {e}")
+    print(f"❌ Error importing: {e}")
     sys.exit(1)
 
 def main():
-    # Montar Google Drive si estamos en Colab
+    # Mount Google Drive if we're in Colab
     try:
         from google.colab import drive
         drive.mount('/content/drive', force_remount=True)
-        print("✅ Google Drive montado")
+        print("✅ Google Drive mounted")
     except ImportError:
-        print("⚠️  No se pudo montar Google Drive (quizás no estamos en Colab)")
+        print("⚠️  Could not mount Google Drive (maybe not in Colab)")
     
-    # Ruta al archivo
+    # File path
     zip_path = "/content/drive/MyDrive/Datasets/ab_newyork.zip"
-    print(f"\\n🔍 Buscando: {zip_path}")
+    print(f"\n🔍 Searching for: {zip_path}")
     
     if not os.path.exists(zip_path):
-        print(f"❌ ERROR: Archivo no encontrado")
-        buscar_archivos_zip()
+        print(f"❌ ERROR: File not found")
+        search_zip_files()
         sys.exit(1)
     
-    print(f"✅ Archivo encontrado ({os.path.getsize(zip_path)/1024/1024:.2f} MB)")
-    print("\\n🚀 Ejecutando pipeline...")
+    print(f"✅ File found ({os.path.getsize(zip_path)/1024/1024:.2f} MB)")
+    print("\n🚀 Running pipeline...")
     
     try:
         pipeline = NYC_Airbnb_ETL()
         data, csv_path, parquet_path = pipeline.run(zip_path)
         
-        print("\\n" + "="*60)
-        print("✅ PIPELINE COMPLETADO EXITOSAMENTE")
+        print("\n" + "="*60)
+        print("✅ PIPELINE COMPLETED SUCCESSFULLY")
         print("="*60)
-        print(f"📊 Registros procesados: {len(data):,}")
+        print(f"📊 Records processed: {len(data):,}")
         print(f"📁 CSV: {csv_path}")
         print(f"📁 Parquet: {parquet_path}")
         
-        # Mostrar muestra
-        print("\\n📄 Primeras filas:")
+        # Show sample
+        print("\n📄 First rows:")
         print(data.head())
         
-        # Resumen básico
-        print("\\n📈 Resumen básico:")
-        print(f"  • Columnas: {len(data.columns)}")
-        print(f"  • Filas: {len(data)}")
+        # Basic summary
+        print("\n📈 Basic summary:")
+        print(f"  • Columns: {len(data.columns)}")
+        print(f"  • Rows: {len(data)}")
         
         if 'price' in data.columns:
-            print(f"  • Precio promedio: ${data['price'].mean():.2f}")
-            print(f"  • Precio mínimo: ${data['price'].min():.2f}")
-            print(f"  • Precio máximo: ${data['price'].max():.2f}")
+            print(f"  • Average price: ${data['price'].mean():.2f}")
+            print(f"  • Minimum price: ${data['price'].min():.2f}")
+            print(f"  • Maximum price: ${data['price'].max():.2f}")
         
     except Exception as e:
-        print(f"\\n❌ Error en el pipeline: {e}")
+        print(f"\n❌ Error in pipeline: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

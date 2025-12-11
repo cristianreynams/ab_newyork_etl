@@ -1,0 +1,33 @@
+# #Extraction
+#   - Load data from ZIP file
+#   - Handle multiple file formats
+#   - Extract metadata
+
+# #Transformation
+#   - Clean missing values
+#   - Standardize data types
+#   - Feature engineering
+#   - Outlier detection
+#   - Neighborhood mapping
+
+# #Loading
+#   - Save to multiple formats
+#   - Database integration ready
+#   - Data quality checks
+
+# #Configuration
+# Edit config.yaml to customize:
+#   - Data paths
+#   - Processing parameters
+#   - Output formats
+#   - Database connections
+
+# #Dependencies
+# See requirements.txt for full list
+
+# #Author
+#   - Cristian Reyna
+#   - GitHub: @cristianreynams
+
+#License
+  MIT License

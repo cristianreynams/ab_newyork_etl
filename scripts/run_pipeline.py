@@ -1,114 +1,93 @@
 #!/usr/bin/env python3
 """
-Script principal para ejecutar el pipeline ETL
+Script para ejecutar el pipeline ETL
 """
-
 import sys
 import os
-import argparse
+import subprocess
 from pathlib import Path
 
-# Añadir el directorio src al path
+# Añadir src al path
 current_dir = Path(__file__).parent
 src_dir = current_dir.parent / "src"
 sys.path.insert(0, str(src_dir))
 
+def buscar_archivos_zip():
+    """Busca archivos ZIP en Google Drive"""
+    print("\\n📂 Explorando Google Drive...")
+    try:
+        # Usar subprocess para ejecutar comandos de shell
+        result = subprocess.run(
+            ['find', '/content/drive/MyDrive', '-name', '*.zip', '-type', 'f'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0 and result.stdout:
+            files = result.stdout.strip().split('\\n')
+            for file in files[:10]:  # Mostrar solo los primeros 10
+                if file:
+                    print(f"  • {file}")
+        else:
+            print("  No se encontraron archivos ZIP")
+    except Exception as e:
+        print(f"  Error al buscar archivos: {e}")
+
+try:
+    from src.pipeline import NYC_Airbnb_ETL
+    print("✅ Módulos importados correctamente")
+except Exception as e:
+    print(f"❌ Error importando: {e}")
+    sys.exit(1)
+
 def main():
-    parser = argparse.ArgumentParser(description='ETL Pipeline para datos de Airbnb NYC')
-    parser.add_argument(
-        '--source', 
-        type=str, 
-        default='/content/drive/MyDrive/Datasets/ab_newyork.zip',
-        help='Ruta al archivo ZIP con los datos (default: /content/drive/MyDrive/Datasets/ab_newyork.zip)'
-    )
-    parser.add_argument(
-        '--output', 
-        type=str, 
-        default='data/processed',
-        help='Directorio de salida para datos procesados (default: data/processed)'
-    )
-    parser.add_argument(
-        '--log-level', 
-        type=str, 
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
-        help='Nivel de logging (default: INFO)'
-    )
+    # Montar Google Drive si estamos en Colab
+    try:
+        from google.colab import drive
+        drive.mount('/content/drive', force_remount=True)
+        print("✅ Google Drive montado")
+    except ImportError:
+        print("⚠️  No se pudo montar Google Drive (quizás no estamos en Colab)")
     
-    args = parser.parse_args()
+    # Ruta al archivo
+    zip_path = "/content/drive/MyDrive/Datasets/ab_newyork.zip"
+    print(f"\\n🔍 Buscando: {zip_path}")
     
-    print("=" * 70)
-    print("ETL PIPELINE - NYC AIRBNB DATA")
-    print("=" * 70)
-    print(f"Source: {args.source}")
-    print(f"Output: {args.output}")
-    print(f"Log level: {args.log_level}")
-    print("=" * 70)
+    if not os.path.exists(zip_path):
+        print(f"❌ ERROR: Archivo no encontrado")
+        buscar_archivos_zip()
+        sys.exit(1)
+    
+    print(f"✅ Archivo encontrado ({os.path.getsize(zip_path)/1024/1024:.2f} MB)")
+    print("\\n🚀 Ejecutando pipeline...")
     
     try:
-        # Importar después de configurar el path
-        from pipeline import NYC_Airbnb_ETL
-        
-        # Configurar nivel de logging
-        import logging
-        logging.getLogger().setLevel(getattr(logging, args.log_level))
-        
-        # Crear y ejecutar pipeline
         pipeline = NYC_Airbnb_ETL()
+        data, csv_path, parquet_path = pipeline.run(zip_path)
         
-        print("\n🚀 Iniciando pipeline...")
-        processed_data = pipeline.run(args.source, args.output)
-        
-        # Mostrar resumen en consola
-        print("\n" + "=" * 70)
+        print("\\n" + "="*60)
         print("✅ PIPELINE COMPLETADO EXITOSAMENTE")
-        print("=" * 70)
-        print(f"📊 Datos procesados: {len(processed_data):,} filas, {len(processed_data.columns)} columnas")
-        print(f"📁 Directorio de salida: {args.output}")
+        print("="*60)
+        print(f"📊 Registros procesados: {len(data):,}")
+        print(f"📁 CSV: {csv_path}")
+        print(f"📁 Parquet: {parquet_path}")
         
-        # Listar archivos generados
-        if os.path.exists(args.output):
-            print("\n📄 Archivos generados:")
-            for file in os.listdir(args.output):
-                file_path = os.path.join(args.output, file)
-                size = os.path.getsize(file_path) / 1024  # KB
-                print(f"  • {file} ({size:.1f} KB)")
+        # Mostrar muestra
+        print("\\n📄 Primeras filas:")
+        print(data.head())
         
-        # Mostrar información básica del dataset
-        print("\n📈 Información del dataset:")
-        print(f"  - Columnas: {list(processed_data.columns)}")
+        # Resumen básico
+        print("\\n📈 Resumen básico:")
+        print(f"  • Columnas: {len(data.columns)}")
+        print(f"  • Filas: {len(data)}")
         
-        if 'price' in processed_data.columns:
-            print(f"  - Precio promedio: ${processed_data['price'].mean():.2f}")
-            print(f"  - Rango de precios: ${processed_data['price'].min():.2f} - ${processed_data['price'].max():.2f}")
-        
-        if 'neighbourhood_group' in processed_data.columns:
-            neighborhoods = processed_data['neighbourhood_group'].value_counts()
-            print(f"  - Distribución por barrio:")
-            for neighborhood, count in neighborhoods.head().items():
-                print(f"      {neighborhood}: {count:,} ({count/len(processed_data)*100:.1f}%)")
-        
-        print("=" * 70)
-        print("✨ Pipeline finalizado. Revisa el archivo etl_pipeline.log para más detalles.")
-        print("=" * 70)
-        
-    except ImportError as e:
-        print(f"\n❌ Error de importación: {e}")
-        print("💡 Asegúrate de que:")
-        print("   1. El archivo src/pipeline.py existe")
-        print("   2. La clase NYC_Airbnb_ETL está definida en pipeline.py")
-        sys.exit(1)
-        
-    except FileNotFoundError as e:
-        print(f"\n❌ Archivo no encontrado: {e}")
-        print("💡 Verifica que:")
-        print("   1. Google Drive está montado (en Colab)")
-        print("   2. La ruta al archivo ZIP es correcta")
-        print("   3. El archivo existe en la ubicación especificada")
-        sys.exit(1)
+        if 'price' in data.columns:
+            print(f"  • Precio promedio: ${data['price'].mean():.2f}")
+            print(f"  • Precio mínimo: ${data['price'].min():.2f}")
+            print(f"  • Precio máximo: ${data['price'].max():.2f}")
         
     except Exception as e:
-        print(f"\n❌ Error durante la ejecución: {e}")
+        print(f"\\n❌ Error en el pipeline: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
